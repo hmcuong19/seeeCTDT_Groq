@@ -15,165 +15,12 @@ from reportlab.pdfbase.ttfonts import TTFont
 # --- Cấu hình và Thiết lập ---
 st.set_page_config(page_title="Trích xuất Thông tin Syllabus", page_icon="✨", layout="wide")
 
-# --- API Key cho Groq ---
-try:
-    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-except (KeyError, FileNotFoundError):
-    st.warning("Không tìm thấy Groq API Key trong Streamlit secrets. Vui lòng nhập thủ công để chạy ứng dụng.")
-    GROQ_API_KEY = st.text_input("Nhập Groq API Key của bạn:", type="password")
-    if not GROQ_API_KEY:
-        st.info("Vui lòng cung cấp API key để bắt đầu.")
-        st.stop()
-
-# Khởi tạo client tương thích Groq
-client = Open Amen(
-    api_key=GROQ_API_KEY,
-    base_url="https://api.groq.com/openai/v1"
-)
-
-# --- Hàm gọi Groq API ---
-def get_groq_response(input_text, prompt, model="llama3-8b-8192"):
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": "Bạn là một trợ lý AI thông minh, chuyên trích xuất thông tin từ tài liệu."},
-                {"role": "user", "content": input_text},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"Đã xảy ra lỗi khi gọi Groq API: {e}"
-
-# --- Hàm xử lý file ---
-def extract_text_from_docx(docx_bytes):
-    try:
-        doc = docx.Document(io.BytesIO(docx_bytes))
-        full_text = []
-        for para in doc.paragraphs:
-            full_text.append(para.text)
-        for table in doc.tables:
-            for row in table.rows:
-                for cell in row.cells:
-                    full_text.append(cell.text)
-        return '\n'.join(full_text)
-    except Exception as e:
-        st.error(f"Lỗi đọc file .docx: {e}")
-        return None
-
-def extract_text_from_pdf(file_bytes):
-    try:
-        pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
-        full_text = ""
-        for page_num in range(len(pdf_document)):
-            page = pdf_document.load_page(page_num)
-            full_text += page.get_text()
-        pdf_document.close()
-        return full_text
-    except Exception as e:
-        st.error(f"Lỗi đọc file .pdf: {e}")
-        return None
-
-# --- Hàm tạo PDF từ nội dung trích xuất ---
-def generate_pdf(extracted_text):
-    try:
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            rightMargin=2*cm,
-            leftMargin=2*cm,
-            topMargin=2*cm,
-            bottomMargin=2*cm
-        )
-        styles = getSampleStyleSheet()
-        
-        # Đăng ký font hỗ trợ tiếng Việt
-        pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
-        
-        # Tạo các style tùy chỉnh
-        title_style = ParagraphStyle(
-            name='Title',
-            fontName='DejaVuSans',
-            fontSize=16,
-            leading=20,
-            alignment=1,  # Căn giữa
-            spaceAfter=20
-        )
-        heading_style = ParagraphStyle(
-            name='Heading',
-            fontName='DejaVuSans',
-            fontSize=12,
-            leading=14,
-            textColor=colors.darkblue,
-            spaceAfter=10
-        )
-        content_style = ParagraphStyle(
-            name='Content',
-            fontName='DejaVuSans',
-            fontSize=10,
-            leading=12,
-            spaceAfter=8,
-            wordWrap='CJK'  # Hỗ trợ ngắt dòng cho tiếng Việt
-        )
-        
-        # Tạo danh sách các phần tử cho PDF
-        story = []
-        
-        # Tìm "Tên học phần" từ nội dung trích xuất
-        title = "Thông Tin Đề Cương Học Phần"  # Mặc định
-        lines = extracted_text.split('\n')
-        for line in lines:
-            line = line.strip()
-            if line.startswith('1.') and 'Tên học phần' in line:
-                # Lấy phần nội dung sau "Tên học phần"
-                next_lines = lines[lines.index(line)+1:]
-                for next_line in next_lines:
-                    if next_line.strip() and not next_line.strip().startswith(('2.', '3.', '4.', '5.', '6.', '7.', '8.')):
-                        title = next_line.strip()
-                        break
-                break
-        
-        # Thêm tiêu đề
-        story.append(Paragraph(title, title_style))
-        story.append(Spacer(领
-
-System: * There was an error in the code, likely due to a typo in the import statement. The line `from openai import OpenAI` is correct, but `client = Open Amen(...)` contains a typo ("Amen" instead of "AI"). I’ll fix this and provide the corrected code with all requested changes.
-
-### Corrected and Updated Code
-The code has been updated to:
-1. **Fix the typo** in the `OpenAI` client initialization (`Open Amen` → `OpenAI`).
-2. **Update the PDF Title**: Use the value of “Tên học phần” from the extracted text, falling back to “Thông Tin Đề Cương Học Phần” if not found.
-3. **Format Content as Paragraphs**: Replace the table with paragraph-based formatting for each syllabus section.
-4. **Move the Button**: Place the “Bắt đầu trích xuất” button above the prompt text area.
-5. **Reduce Font Size of App Title**: Apply custom CSS to reduce the font size of “Trích xuất Thông tin từ Tài liệu với Groq AI”.
-
-<xaiArtifact artifact_id="d2710839-340e-4cf0-bce9-0a16903108e1" artifact_version_id="a3166559-133c-4209-bd61-fcbe58bd8086" title="app.py" contentType="text/python">
-import streamlit as st
-import io
-import docx
-import fitz  # PyMuPDF
-import openai
-from openai import OpenAI
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib import colors
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-
-# --- Cấu hình và Thiết lập ---
-st.set_page_config(page_title="Trích xuất Thông tin Syllabus", page_icon="✨", layout="wide")
-
 # --- CSS tùy chỉnh để thu nhỏ font chữ tiêu đề ---
 st.markdown(
     """
     <style>
     .main-title {
-        font-size: 24px !important;  /* Giảm kích thước font chữ */
+        font-size: 24px !important;  # Giảm kích thước font chữ
         font-weight: bold;
     }
     </style>
@@ -291,12 +138,11 @@ def generate_pdf(extracted_text):
         # Tìm "Tên học phần" từ nội dung trích xuất
         title = "Thông Tin Đề Cương Học Phần"  # Mặc định
         lines = extracted_text.split('\n')
-        for line in lines:
+        for i, line in enumerate(lines):
             line = line.strip()
             if line.startswith('1.') and 'Tên học phần' in line:
                 # Lấy phần nội dung sau "Tên học phần"
-                next_lines = lines[lines.index(line)+1:]
-                for next_line in next_lines:
+                for next_line in lines[i+1:]:
                     if next_line.strip() and not next_line.strip().startswith(('2.', '3.', '4.', '5.', '6.', '7.', '8.')):
                         title = next_line.strip()
                         break
