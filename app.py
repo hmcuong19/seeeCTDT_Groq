@@ -6,7 +6,7 @@ import openai
 from openai import OpenAI
 
 # --- Cấu hình và Thiết lập ---
-st.set_page_config(page_title="Trích xuất Thông tin Thông minh", page_icon="✨", layout="wide")
+st.set_page_config(page_title="Trích xuất Thông tin Syllabus", page_icon="✨", layout="wide")
 
 # --- API Key cho Groq ---
 try:
@@ -82,15 +82,15 @@ with col1:
 
     prompt_default = """Bạn là một trợ lý AI chuyên nghiệp trong việc trích xuất thông tin.
 
-Từ nội dung đề cương học phần dưới đây, hãy trích xuất và trình bày rõ ràng theo kiểu đánh số thứ tự theo các mục sau:
-1. Tên học phần
-2. Mã học phần (nếu có)
-3. Số tín chỉ
-4. Điều kiện tiên quyết (nếu có)
-5. Mục tiêu học phần
-6. Chuẩn đầu ra của học phần (CLO)
-7. Nội dung học phần tóm tắt
-8. Tài liệu tham khảo (ghi rõ tên, tác giả, năm, NXB nếu có)
+Từ nội dung đề cương học phần cung cấp, hãy trích xuất và trình bày rõ ràng theo kiểu đánh số thứ tự với các mục sau:
+Tên học phần
+Mã học phần (nếu có)
+Số tín chỉ
+Điều kiện tiên quyết (nếu có)
+Mục tiêu học phần
+Chuẩn đầu ra của học phần (CLO)
+Nội dung học phần tóm tắt
+Tài liệu tham khảo (ghi rõ tên, tác giả, năm, NXB nếu có)
 
 Nếu không tìm thấy thông tin nào, hãy ghi là "Không tìm thấy".
 """
