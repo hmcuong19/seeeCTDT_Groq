@@ -5,32 +5,29 @@ import fitz  # PyMuPDF
 import openai
 from openai import OpenAI
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate
-from reportlab.lib.units import mm
 import tempfile
 
-# --- Cấu hình và Thiết lập ---
+# --- Cấu hình ---
 st.set_page_config(page_title="Trích xuất Thông tin Thông minh", page_icon="✨", layout="wide")
 
-# --- API Key cho Groq ---
+# --- API Key ---
 try:
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except (KeyError, FileNotFoundError):
-    st.warning("Không tìm thấy Groq API Key trong Streamlit secrets. Vui lòng nhập thủ công để chạy ứng dụng.")
+    st.warning("Không tìm thấy Groq API Key trong Streamlit secrets. Vui lòng nhập thủ công.")
     GROQ_API_KEY = st.text_input("Nhập Groq API Key của bạn:", type="password")
     if not GROQ_API_KEY:
-        st.info("Vui lòng cung cấp API key để bắt đầu.")
         st.stop()
 
-# Khởi tạo client tương thích Groq
+# Khởi tạo client Groq
 client = OpenAI(
     api_key=GROQ_API_KEY,
     base_url="https://api.groq.com/openai/v1"
 )
 
-# --- Hàm gọi Groq API ---
+# --- Gọi API ---
 def get_groq_response(input_text, prompt, model="llama3-8b-8192"):
     try:
         response = client.chat.completions.create(
@@ -46,7 +43,7 @@ def get_groq_response(input_text, prompt, model="llama3-8b-8192"):
     except Exception as e:
         return f"Đã xảy ra lỗi khi gọi Groq API: {e}"
 
-# --- Hàm xử lý file ---
+# --- Đọc file .docx ---
 def extract_text_from_docx(docx_bytes):
     try:
         doc = docx.Document(io.BytesIO(docx_bytes))
@@ -62,12 +59,12 @@ def extract_text_from_docx(docx_bytes):
         st.error(f"Lỗi đọc file .docx: {e}")
         return None
 
+# --- Đọc file .pdf ---
 def extract_text_from_pdf(file_bytes):
     try:
         pdf_document = fitz.open(stream=file_bytes, filetype="pdf")
         full_text = ""
-        for page_num in range(len(pdf_document)):
-            page = pdf_document.load_page(page_num)
+        for page in pdf_document:
             full_text += page.get_text()
         pdf_document.close()
         return full_text
@@ -75,11 +72,8 @@ def extract_text_from_pdf(file_bytes):
         st.error(f"Lỗi đọc file .pdf: {e}")
         return None
 
-# --- Hàm tạo PDF từ kết quả ---
+# --- Tạo PDF từ văn bản ---
 def export_to_pdf(text_output):
-    """
-    Tạo file PDF từ text_output bằng phong cách bố cục đẹp như LaTeX.
-    """
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         file_path = tmp_file.name
 
@@ -92,15 +86,12 @@ def export_to_pdf(text_output):
     styleH = styles["Heading1"]
 
     elements = []
-
-    # Tiêu đề
     elements.append(Paragraph("Thông tin trích xuất từ tài liệu", styleH))
     elements.append(Paragraph("<br/>", styleN))
 
-    # Xử lý từng dòng kết quả
     for line in text_output.strip().split("\n"):
         if line.strip() != "":
-            line = line.replace("**", "")  # loại bỏ markdown nếu có
+            line = line.replace("**", "")
             elements.append(Paragraph(line, styleN))
 
     doc.build(elements)
@@ -137,43 +128,46 @@ Nếu không tìm thấy thông tin nào, hãy ghi là "Không tìm thấy".
 with col2:
     st.header("2. Kết quả trích xuất")
     result_container = st.container()
-    result_container.info("Kết quả sẽ được hiển thị ở đây sau khi bạn nhấn nút 'Bắt đầu trích xuất'.")
+    result_container.info("Kết quả sẽ hiển thị sau khi bạn nhấn 'Bắt đầu trích xuất'.")
 
     if submit_button:
         if uploaded_file and prompt_user:
-            with st.spinner("Đang xử lý file... Vui lòng chờ! 🤖"):
+            with st.spinner("🔍 Đang xử lý file..."):
                 file_bytes = uploaded_file.getvalue()
-                file_extension = uploaded_file.name.split('.')[-1].lower()
+                ext = uploaded_file.name.split('.')[-1].lower()
                 raw_text = None
 
-                st.info(f"Đang đọc file {file_extension}...")
-                if file_extension == "docx":
+                if ext == "docx":
                     raw_text = extract_text_from_docx(file_bytes)
-                elif file_extension == "pdf":
+                elif ext == "pdf":
                     raw_text = extract_text_from_pdf(file_bytes)
 
                 if raw_text and raw_text.strip():
-                    st.success("Đọc file thành công!")
-                    st.info("Đang gửi nội dung đến mô hình AI...")
+                    st.success("✅ Trích xuất văn bản thành công.")
                     response = get_groq_response(raw_text, prompt_user)
+
                     result_container.text_area("Thông tin đã trích xuất:", value=response, height=550)
 
-                    # Nút để xuất PDF
-                    if response and st.button("📄 Xuất ra file PDF"):
-                        with st.spinner("Đang tạo file PDF..."):
-                            pdf_file_path = export_to_pdf(response)
-                            with open(pdf_file_path, "rb") as f:
-                                st.download_button(
-                                    label="📥 Tải về PDF",
-                                    data=f,
-                                    file_name="thong_tin_trich_xuat.pdf",
-                                    mime="application/pdf"
-                                )
+                    export_col1, export_col2 = st.columns([1, 4])
+                    with export_col1:
+                        if st.button("📄 Tạo file PDF"):
+                            with st.spinner("📝 Đang tạo PDF..."):
+                                pdf_path = export_to_pdf(response)
+                                st.session_state['pdf_ready'] = pdf_path
+
+                    if 'pdf_ready' in st.session_state:
+                        with open(st.session_state['pdf_ready'], "rb") as f:
+                            st.download_button(
+                                label="📥 Tải PDF về máy",
+                                data=f.read(),
+                                file_name="thong_tin_trich_xuat.pdf",
+                                mime="application/pdf"
+                            )
                 elif raw_text is not None:
-                    result_container.warning("Không tìm thấy nội dung văn bản nào trong file.")
+                    result_container.warning("⚠️ Không tìm thấy nội dung văn bản trong file.")
                 else:
-                    result_container.error("Lỗi khi trích xuất nội dung. Vui lòng thử lại với file khác.")
+                    result_container.error("❌ Lỗi khi xử lý file.")
         elif not uploaded_file:
-            st.warning("Vui lòng tải lên một file.")
+            st.warning("📎 Vui lòng tải lên một file.")
         else:
-            st.warning("Prompt không được để trống.")
+            st.warning("⚠️ Prompt không được để trống.")
