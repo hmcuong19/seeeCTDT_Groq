@@ -11,7 +11,6 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from datetime import datetime
 
 # --- Cấu hình và Thiết lập ---
 st.set_page_config(page_title="Trích xuất Thông tin Syllabus", page_icon="✨", layout="wide")
@@ -103,27 +102,28 @@ def generate_pdf(extracted_text):
             alignment=1,  # Căn giữa
             spaceAfter=20
         )
-        heading_style = ParagraphStyle(
-            name='Heading',
-            fontName='DejaVuSans',
-            fontSize=12,
-            leading=14,
-            spaceAfter=10,
-            textColor=colors.darkblue
-        )
-        body_style = ParagraphStyle(
-            name='Body',
+        label_style = ParagraphStyle(
+            name='Label',
             fontName='DejaVuSans',
             fontSize=10,
             leading=12,
-            spaceAfter=8
+            textColor=colors.darkblue,
+            spaceAfter=4
+        )
+        content_style = ParagraphStyle(
+            name='Content',
+            fontName='DejaVuSans',
+            fontSize=10,
+            leading=12,
+            spaceAfter=4,
+            wordWrap='CJK'  # Hỗ trợ ngắt dòng cho tiếng Việt
         )
         
         # Tạo danh sách các phần tử cho PDF
         story = []
         
         # Tiêu đề
-        story.append(Paragraph("Thông Tin Đề Cương Học Phần", title_style))
+        story.append(Paragraph("Tên học phần", title_style))
         story.append(Spacer(1, 0.5*cm))
         
         # Tách văn bản thành các dòng
@@ -139,53 +139,47 @@ def generate_pdf(extracted_text):
                 continue
             # Kiểm tra các mục chính (dựa trên prompt mặc định)
             if line.startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.')):
-                if current_section and table_data:
+                if current_section and section_content:
                     # Thêm nội dung của mục trước đó
-                    if len(table_data[-1]) == 2 and table_data[-1][0] == current_section:
-                        table_data[-1][1] = '\n'.join(section_content)
-                    else:
-                        table_data.append([current_section, '\n'.join(section_content)])
+                    content_text = '\n'.join(section_content)
+                    table_data.append([
+                        Paragraph(current_section, label_style),
+                        Paragraph(content_text, content_style)
+                    ])
                 current_section = line.split(' ', 1)[1] if ' ' in line else line
                 section_content = []
-                table_data.append([current_section, ""])
             else:
                 section_content.append(line)
         
         # Thêm mục cuối cùng
         if current_section and section_content:
-            if len(table_data[-1]) == 2 and table_data[-1][0] == current_section:
-                table_data[-1][1] = '\n'.join(section_content)
-            else:
-                table_data.append([current_section, '\n'.join(section_content)])
+            content_text = '\n'.join(section_content)
+            table_data.append([
+                Paragraph(current_section, label_style),
+                Paragraph(content_text, content_style)
+            ])
         
         # Tạo bảng cho các mục chính
         if table_data:
-            table = Table(table_data, colWidths=[4*cm, 13*cm])
+            table = Table(table_data, colWidths=[4*cm, 12.5*cm])
             table.setStyle(TableStyle([
                 ('FONT', (0, 0), (-1, -1), 'DejaVuSans'),
                 ('FONTSIZE', (0, 0), (-1, -1), 10),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('TEXTCOLOR', (0, 0), (0, -1), colors.darkblue),
+                ('TEXTCOLOR', (1, 0), (1, -1), colors.black),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
                 ('BOX', (0, 0), (-1, -1), 1, colors.black),
                 ('LEFTPADDING', (0, 0), (-1, -1), 6),
                 ('RIGHTPADDING', (0, 0), (-1, -1), 6),
                 ('TOPPADDING', (0, 0), (-1, -1), 6),
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('WORDWRAP', (0, 0), (-1, -1), 'CJK')  # Hỗ trợ ngắt dòng
             ]))
             story.append(table)
         
-        # Thêm footer với ngày và số trang
-        def add_page_number(canvas, doc):
-            page_num = canvas.getPageNumber()
-            text = f"Trang {page_num} | Được tạo vào {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-            canvas.saveState()
-            canvas.setFont('DejaVuSans', 8)
-            canvas.drawCentredString(A4[0]/2, 1*cm, text)
-            canvas.restoreState()
-        
-        # Xây dựng PDF
-        doc.build(story, onFirstPage=add_page_number, onLaterPages=add_page_number)
+        # Xây dựng PDF (không có footer)
+        doc.build(story)
         buffer.seek(0)
         return buffer
     except Exception as e:
