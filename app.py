@@ -6,7 +6,7 @@ import openai
 from openai import OpenAI
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
@@ -14,19 +14,6 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 # --- Cấu hình và Thiết lập ---
 st.set_page_config(page_title="Trích xuất Thông tin Syllabus", page_icon="✨", layout="wide")
-
-# --- CSS tùy chỉnh để thu nhỏ font chữ tiêu đề ---
-st.markdown(
-    """
-    <style>
-    .main-title {
-        font-size: 24px !important;  # Giảm kích thước font chữ
-        font-weight: bold;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
 
 # --- API Key cho Groq ---
 try:
@@ -115,47 +102,37 @@ def generate_pdf(extracted_text):
             alignment=1,  # Căn giữa
             spaceAfter=20
         )
-        heading_style = ParagraphStyle(
-            name='Heading',
+        label_style = ParagraphStyle(
+            name='Label',
             fontName='DejaVuSans',
-            fontSize=12,
-            leading=14,
+            fontSize=10,
+            leading=12,
             textColor=colors.darkblue,
-            spaceAfter=10
+            spaceAfter=4
         )
         content_style = ParagraphStyle(
             name='Content',
             fontName='DejaVuSans',
             fontSize=10,
             leading=12,
-            spaceAfter=8,
+            spaceAfter=4,
             wordWrap='CJK'  # Hỗ trợ ngắt dòng cho tiếng Việt
         )
         
         # Tạo danh sách các phần tử cho PDF
         story = []
         
-        # Tìm "Tên học phần" từ nội dung trích xuất
-        title = "Thông Tin Đề Cương Học Phần"  # Mặc định
-        lines = extracted_text.split('\n')
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if line.startswith('1.') and 'Tên học phần' in line:
-                # Lấy phần nội dung sau "Tên học phần"
-                for next_line in lines[i+1:]:
-                    if next_line.strip() and not next_line.strip().startswith(('2.', '3.', '4.', '5.', '6.', '7.', '8.')):
-                        title = next_line.strip()
-                        break
-                break
-        
-        # Thêm tiêu đề
-        story.append(Paragraph(title, title_style))
+        # Tiêu đề
+        story.append(Paragraph("Tên học phần", title_style))
         story.append(Spacer(1, 0.5*cm))
         
-        # Tách văn bản thành các mục và định dạng dưới dạng đoạn văn
+        # Tách văn bản thành các dòng
+        lines = extracted_text.split('\n')
+        table_data = []
         current_section = None
         section_content = []
         
+        # Phân tích nội dung để tách các mục
         for line in lines:
             line = line.strip()
             if not line:
@@ -163,10 +140,12 @@ def generate_pdf(extracted_text):
             # Kiểm tra các mục chính (dựa trên prompt mặc định)
             if line.startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.')):
                 if current_section and section_content:
-                    # Thêm tiêu đề và nội dung của mục trước đó
-                    story.append(Paragraph(current_section, heading_style))
-                    story.append(Paragraph('\n'.join(section_content), content_style))
-                    story.append(Spacer(1, 0.3*cm))
+                    # Thêm nội dung của mục trước đó
+                    content_text = '\n'.join(section_content)
+                    table_data.append([
+                        Paragraph(current_section, label_style),
+                        Paragraph(content_text, content_style)
+                    ])
                 current_section = line.split(' ', 1)[1] if ' ' in line else line
                 section_content = []
             else:
@@ -174,10 +153,32 @@ def generate_pdf(extracted_text):
         
         # Thêm mục cuối cùng
         if current_section and section_content:
-            story.append(Paragraph(current_section, heading_style))
-            story.append(Paragraph('\n'.join(section_content), content_style))
+            content_text = '\n'.join(section_content)
+            table_data.append([
+                Paragraph(current_section, label_style),
+                Paragraph(content_text, content_style)
+            ])
         
-        # Xây dựng PDF
+        # Tạo bảng cho các mục chính
+        if table_data:
+            table = Table(table_data, colWidths=[4*cm, 12.5*cm])
+            table.setStyle(TableStyle([
+                ('FONT', (0, 0), (-1, -1), 'DejaVuSans'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TEXTCOLOR', (0, 0), (0, -1), colors.darkblue),
+                ('TEXTCOLOR', (1, 0), (1, -1), colors.black),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('BOX', (0, 0), (-1, -1), 1, colors.black),
+                ('LEFTPADDING', (0, 0), (-1, -1), 6),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('WORDWRAP', (0, 0), (-1, -1), 'CJK')  # Hỗ trợ ngắt dòng
+            ]))
+            story.append(table)
+        
+        # Xây dựng PDF (không có footer)
         doc.build(story)
         buffer.seek(0)
         return buffer
@@ -186,7 +187,7 @@ def generate_pdf(extracted_text):
         return None
 
 # --- Giao diện Streamlit ---
-st.markdown('<h1 class="main-title">Trích xuất Thông tin từ Tài liệu với Groq AI</h1>', unsafe_allow_html=True)
+st.title("✨ Trích xuất Thông tin từ Tài liệu với Groq AI")
 st.markdown("Tải lên tệp `.docx` hoặc `.pdf` để bắt đầu.")
 
 col1, col2 = st.columns([2, 3])
@@ -210,8 +211,8 @@ Tài liệu tham khảo (ghi rõ tên, tác giả, năm, NXB nếu có)
 
 Nếu không tìm thấy thông tin nào, hãy ghi là "Không tìm thấy".
 """
-    submit_button = st.button("🚀 Bắt đầu trích xuất")
     prompt_user = st.text_area("Chỉnh sửa prompt:", value=prompt_default, height=350)
+    submit_button = st.button("🚀 Bắt đầu trích xuất")
 
 with col2:
     st.header("2. Kết quả trích xuất")
