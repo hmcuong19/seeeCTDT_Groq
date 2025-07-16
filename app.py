@@ -4,9 +4,15 @@ import docx
 import fitz  # PyMuPDF
 import openai
 from openai import OpenAI
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate
+from reportlab.lib.units import mm
+import tempfile
 
 # --- Cấu hình và Thiết lập ---
-st.set_page_config(page_title="Trích xuất Thông tin Syllabus", page_icon="✨", layout="wide")
+st.set_page_config(page_title="Trích xuất Thông tin Thông minh", page_icon="✨", layout="wide")
 
 # --- API Key cho Groq ---
 try:
@@ -69,6 +75,37 @@ def extract_text_from_pdf(file_bytes):
         st.error(f"Lỗi đọc file .pdf: {e}")
         return None
 
+# --- Hàm tạo PDF từ kết quả ---
+def export_to_pdf(text_output):
+    """
+    Tạo file PDF từ text_output bằng phong cách bố cục đẹp như LaTeX.
+    """
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        file_path = tmp_file.name
+
+    doc = SimpleDocTemplate(file_path, pagesize=A4,
+                            rightMargin=20, leftMargin=20,
+                            topMargin=20, bottomMargin=20)
+
+    styles = getSampleStyleSheet()
+    styleN = styles["Normal"]
+    styleH = styles["Heading1"]
+
+    elements = []
+
+    # Tiêu đề
+    elements.append(Paragraph("Thông tin trích xuất từ tài liệu", styleH))
+    elements.append(Paragraph("<br/>", styleN))
+
+    # Xử lý từng dòng kết quả
+    for line in text_output.strip().split("\n"):
+        if line.strip() != "":
+            line = line.replace("**", "")  # loại bỏ markdown nếu có
+            elements.append(Paragraph(line, styleN))
+
+    doc.build(elements)
+    return file_path
+
 # --- Giao diện Streamlit ---
 st.title("✨ Trích xuất Thông tin từ Tài liệu với Groq AI")
 st.markdown("Tải lên tệp `.docx` hoặc `.pdf` để bắt đầu.")
@@ -82,15 +119,15 @@ with col1:
 
     prompt_default = """Bạn là một trợ lý AI chuyên nghiệp trong việc trích xuất thông tin.
 
-Từ nội dung đề cương học phần cung cấp, hãy trích xuất và trình bày rõ ràng theo kiểu đánh số thứ tự với các mục sau:
-Tên học phần
-Mã học phần (nếu có)
-Số tín chỉ
-Điều kiện tiên quyết (nếu có)
-Mục tiêu học phần
-Chuẩn đầu ra của học phần (CLO)
-Nội dung học phần tóm tắt
-Tài liệu tham khảo (ghi rõ tên, tác giả, năm, NXB nếu có)
+Từ nội dung đề cương học phần dưới đây, hãy trích xuất và trình bày rõ ràng theo kiểu đánh số thứ tự theo các mục sau:
+1. Tên học phần
+2. Mã học phần (nếu có)
+3. Số tín chỉ
+4. Điều kiện tiên quyết (nếu có)
+5. Mục tiêu học phần
+6. Chuẩn đầu ra của học phần (CLO)
+7. Nội dung học phần tóm tắt
+8. Tài liệu tham khảo (ghi rõ tên, tác giả, năm, NXB nếu có)
 
 Nếu không tìm thấy thông tin nào, hãy ghi là "Không tìm thấy".
 """
@@ -120,6 +157,18 @@ with col2:
                     st.info("Đang gửi nội dung đến mô hình AI...")
                     response = get_groq_response(raw_text, prompt_user)
                     result_container.text_area("Thông tin đã trích xuất:", value=response, height=550)
+
+                    # Nút để xuất PDF
+                    if response and st.button("📄 Xuất ra file PDF"):
+                        with st.spinner("Đang tạo file PDF..."):
+                            pdf_file_path = export_to_pdf(response)
+                            with open(pdf_file_path, "rb") as f:
+                                st.download_button(
+                                    label="📥 Tải về PDF",
+                                    data=f,
+                                    file_name="thong_tin_trich_xuat.pdf",
+                                    mime="application/pdf"
+                                )
                 elif raw_text is not None:
                     result_container.warning("Không tìm thấy nội dung văn bản nào trong file.")
                 else:
