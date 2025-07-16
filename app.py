@@ -148,21 +148,17 @@ with col2:
 
                     result_container.text_area("Thông tin đã trích xuất:", value=response, height=550)
 
-                    export_col1, export_col2 = st.columns([1, 4])
-                    with export_col1:
-                        if st.button("📄 Tạo file PDF"):
-                            with st.spinner("📝 Đang tạo PDF..."):
-                                pdf_path = export_to_pdf(response)
-                                st.session_state['pdf_ready'] = pdf_path
-
-                    if 'pdf_ready' in st.session_state:
-                        with open(st.session_state['pdf_ready'], "rb") as f:
-                            st.download_button(
-                                label="📥 Tải PDF về máy",
-                                data=f.read(),
-                                file_name="thong_tin_trich_xuat.pdf",
-                                mime="application/pdf"
-                            )
+                    # Tạo PDF và cho phép tải về
+                    if st.button("📄 Tạo và Tải file PDF"):
+                        with st.spinner("📝 Đang tạo PDF..."):
+                            pdf_path = export_to_pdf(response)
+                            with open(pdf_path, "rb") as f:
+                                st.download_button(
+                                    label="📥 Bấm để tải PDF",
+                                    data=f.read(),
+                                    file_name="thong_tin_trich_xuat.pdf",
+                                    mime="application/pdf"
+                                )
                 elif raw_text is not None:
                     result_container.warning("⚠️ Không tìm thấy nội dung văn bản trong file.")
                 else:
