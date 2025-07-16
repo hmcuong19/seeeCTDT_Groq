@@ -3,12 +3,12 @@ import io
 import docx
 import fitz  # PyMuPDF
 import openai
+from openai import OpenAI
 
 # --- Cấu hình và Thiết lập ---
-
 st.set_page_config(page_title="Trích xuất Thông tin Thông minh", page_icon="✨", layout="wide")
 
-# --- API Key cho Groq (OpenAI-compatible) ---
+# --- API Key cho Groq ---
 try:
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 except (KeyError, FileNotFoundError):
@@ -18,30 +18,29 @@ except (KeyError, FileNotFoundError):
         st.info("Vui lòng cung cấp API key để bắt đầu.")
         st.stop()
 
-# Cấu hình client cho Groq
-openai.api_key = GROQ_API_KEY
-openai.base_url = "https://api.groq.com/openai/v1"
+# Khởi tạo client tương thích Groq
+client = OpenAI(
+    api_key=GROQ_API_KEY,
+    base_url="https://api.groq.com/openai/v1"
+)
 
-# --- Các hàm xử lý ---
-
+# --- Hàm gọi Groq API ---
 def get_groq_response(input_text, prompt, model="llama3-8b-8192"):
-    """
-    Gọi API Groq (OpenAI-compatible) với mô hình llama3-8b-8192 hoặc mixtral-8x7b.
-    """
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": "Bạn là một trợ lý AI thông minh, chuyên trích xuất thông tin từ tài liệu."},
                 {"role": "user", "content": input_text},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.3,
+            temperature=0.3
         )
         return response.choices[0].message.content
     except Exception as e:
         return f"Đã xảy ra lỗi khi gọi Groq API: {e}"
 
+# --- Hàm xử lý file ---
 def extract_text_from_docx(docx_bytes):
     try:
         doc = docx.Document(io.BytesIO(docx_bytes))
@@ -70,8 +69,7 @@ def extract_text_from_pdf(file_bytes):
         st.error(f"Lỗi đọc file .pdf: {e}")
         return None
 
-# --- Giao diện chính ---
-
+# --- Giao diện Streamlit ---
 st.title("✨ Trích xuất Thông tin từ Tài liệu với Groq AI")
 st.markdown("Tải lên tệp `.docx` hoặc `.pdf` để bắt đầu.")
 
@@ -79,6 +77,7 @@ col1, col2 = st.columns([2, 3])
 
 with col1:
     st.header("1. Tải lên & Tùy chỉnh")
+
     uploaded_file = st.file_uploader("Chọn một tệp (.docx hoặc .pdf)", type=['docx', 'pdf'])
 
     prompt_default = """Bạn là một trợ lý AI chuyên nghiệp trong việc trích xuất thông tin.
@@ -118,7 +117,7 @@ with col2:
 
                 if raw_text and raw_text.strip():
                     st.success("Đọc file thành công!")
-                    st.info("Văn bản đã được trích xuất. Đang gửi yêu cầu đến Groq AI...")
+                    st.info("Đang gửi nội dung đến mô hình AI...")
                     response = get_groq_response(raw_text, prompt_user)
                     result_container.text_area("Thông tin đã trích xuất:", value=response, height=550)
                 elif raw_text is not None:
