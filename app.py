@@ -7,6 +7,8 @@ from openai import OpenAI
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 # --- Cấu hình và Thiết lập ---
 st.set_page_config(page_title="Trích xuất Thông tin Syllabus", page_icon="✨", layout="wide")
@@ -74,21 +76,32 @@ def extract_text_from_pdf(file_bytes):
 
 # --- Hàm tạo PDF từ nội dung trích xuất ---
 def generate_pdf(extracted_text):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
-    styles = getSampleStyleSheet()
-    style = styles['Normal']
-    
-    # Tách văn bản thành các dòng và tạo danh sách các phần tử Paragraph
-    story = []
-    for line in extracted_text.split('\n'):
-        if line.strip():
-            story.append(Paragraph(line, style))
-            story.append(Spacer(1, 12))
-    
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
+    try:
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        styles = getSampleStyleSheet()
+        
+        # Đăng ký font hỗ trợ tiếng Việt
+        pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
+        style = styles['Normal']
+        style.fontName = 'DejaVuSans'
+        style.fontSize = 12
+        style.leading = 14
+        
+        # Tách văn bản thành các dòng và tạo danh sách các phần tử Paragraph
+        story = []
+        for line in extracted_text.split('\n'):
+            if line.strip():
+                # Đảm bảo văn bản được mã hóa đúng
+                story.append(Paragraph(line.encode('utf-8').decode('utf-8'), style))
+                story.append(Spacer(1, 12))
+        
+        doc.build(story)
+        buffer.seek(0)
+        return buffer
+    except Exception as e:
+        st.error(f"Lỗi khi tạo PDF: {e}")
+        return None
 
 # --- Giao diện Streamlit ---
 st.title("✨ Trích xuất Thông tin từ Tài liệu với Groq AI")
@@ -144,12 +157,15 @@ with col2:
                     
                     # Tạo và cung cấp nút tải PDF
                     pdf_buffer = generate_pdf(response)
-                    result_container.download_button(
-                        label="📄 Tải xuống kết quả dưới dạng PDF",
-                        data=pdf_buffer,
-                        file_name="extracted_information.pdf",
-                        mime="application/pdf"
-                    )
+                    if pdf_buffer:
+                        result_container.download_button(
+                            label="📄 Tải xuống kết quả dưới dạng PDF",
+                            data=pdf_buffer,
+                            file_name="extracted_information.pdf",
+                            mime="application/pdf"
+                        )
+                    else:
+                        result_container.error("Không thể tạo file PDF. Vui lòng thử lại.")
                 elif raw_text is not None:
                     result_container.warning("Không tìm thấy nội dung văn bản nào trong file.")
                 else:
